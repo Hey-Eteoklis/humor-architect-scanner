@@ -4,124 +4,263 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
-  <title>HUMOR Architect — Camera Test</title>
+  <title>HUMOR Architect — Staff Scanner (Test)</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
-    body { margin: 0; padding: 24px 18px 50px; background: #000; color: #fff; font-family: Arial, Helvetica, sans-serif; }
+    body { margin: 0; padding: 20px 16px 50px; background: #000; color: #fff; font-family: Arial, Helvetica, sans-serif; }
     main { max-width: 460px; margin: 0 auto; }
-    .brand { background: #fff; color: #000; font-size: 35px; font-weight: 900; letter-spacing: 1px; text-align: center; padding: 12px; margin: 0 0 30px; }
-    h1 { font-size: 29px; line-height: 1.05; margin: 0 0 7px; }
-    .subtitle { color: #aaa; font-size: 13px; letter-spacing: 1px; margin: 0 0 22px; }
-    .test { border: 1px solid #aaa; color: #eee; text-align: center; font-size: 12px; padding: 12px; margin-bottom: 22px; }
-    #reader { min-height: 240px; background: #111; border: 1px solid #444; overflow: hidden; border-radius: 8px; }
-    #reader video { width: 100% !important; }
-    button { width: 100%; margin-top: 14px; padding: 16px; border: none; border-radius: 5px; background: #fff; color: #000; font-size: 16px; font-weight: 800; cursor: pointer; }
+    .brand { background: #fff; color: #000; font-size: 35px; font-weight: 900; text-align: center; padding: 12px; margin: 0 0 25px; }
+    h1 { font-size: 29px; margin: 0 0 5px; }
+    h2 { font-size: 20px; margin: 22px 0 10px; }
+    .subtitle { color: #aaa; font-size: 12px; letter-spacing: 1px; margin: 0 0 20px; }
+    .test { border: 1px solid #aaa; color: #eee; text-align: center; font-size: 12px; padding: 12px; margin-bottom: 20px; line-height: 1.45; }
+    label { display: block; font-size: 12px; font-weight: bold; letter-spacing: 1px; margin: 18px 0 8px; }
+    input { width: 100%; padding: 15px; border: 1px solid #777; border-radius: 5px; background: #161616; color: #fff; font-size: 16px; }
+    button { width: 100%; margin-top: 12px; padding: 16px; border: 0; border-radius: 5px; background: #fff; color: #000; font-size: 16px; font-weight: 800; cursor: pointer; }
     button.secondary { background: #222; color: #fff; border: 1px solid #666; }
     button:disabled { opacity: .5; cursor: wait; }
-    #status { margin-top: 20px; padding: 18px; background: #222; border: 1px solid #777; border-radius: 6px; font-size: 15px; font-weight: bold; line-height: 1.45; text-align: center; overflow-wrap: anywhere; }
-    #status.good { background: #14351f; border-color: #53c27b; color: #bdf4cb; }
-    #status.bad { background: #481818; border-color: #ed6969; color: #ffc2c2; }
-    .help { font-size: 12px; line-height: 1.5; color: #bbb; margin-top: 20px; }
-    .counter { font-size: 13px; color: #ddd; text-align: center; margin-top: 14px; }
+    #reader { min-height: 220px; background: #111; border: 1px solid #555; overflow: hidden; border-radius: 7px; }
+    #reader video { width: 100% !important; }
+    .result { margin-top: 18px; padding: 18px; background: #222; border: 1px solid #666; border-radius: 6px; text-align: center; font-weight: bold; line-height: 1.5; white-space: pre-line; overflow-wrap: anywhere; }
+    .good { background: #14351f; border-color: #53c27b; color: #bdf4cb; }
+    .bad { background: #481818; border-color: #ed6969; color: #ffc2c2; }
+    .neutral { background: #222; border-color: #888; color: #fff; }
+    [hidden] { display: none !important; }
+    .help { color: #bbb; font-size: 12px; line-height: 1.5; margin-top: 20px; }
+    .counter { text-align: center; color: #ccc; font-size: 12px; margin-top: 10px; }
   </style>
+  <!-- Pinned to the same scanner-library version that passed the camera test. -->
   <script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js" defer></script>
 </head>
 <body>
 <main>
   <div class="brand">HUMOR</div>
   <h1>THE ARCHITECT</h1>
-  <p class="subtitle">MOBILE CAMERA SCANNER</p>
-  <div class="test">CAMERA TEST ONLY — NO TICKETS VALIDATED OR CHECKED IN</div>
-  <div id="reader" aria-label="Camera preview area"></div>
-  <button id="startBtn" type="button">START CAMERA</button>
-  <button id="stopBtn" class="secondary" type="button" disabled>STOP CAMERA</button>
-  <div id="status" role="status" aria-live="polite">Camera is off. Tap START CAMERA to begin.</div>
-  <div class="counter" id="count">QR codes detected in this test: 0</div>
-  <p class="help">For testing, point the camera at any non-sensitive QR code. This page only confirms that your phone can detect it. It does not contact Google Sheets or Apps Script, validate admission, save QR data, or send emails.</p>
+  <p class="subtitle">STAFF QR SCANNER</p>
+  <div class="test">TEST MODE — TICKETS ARE VERIFIED ONLY<br>NO ADMISSIONS RECORDED</div>
+
+  <section id="loginPanel">
+    <h2>Staff sign in</h2>
+    <form id="loginForm">
+      <label for="passcode">STAFF PASSCODE</label>
+      <input id="passcode" type="password" autocomplete="off" required maxlength="256">
+      <button id="loginBtn" type="submit">SIGN IN</button>
+    </form>
+    <div id="loginResult" class="result neutral" role="status" aria-live="polite" hidden></div>
+  </section>
+
+  <section id="scannerPanel" hidden>
+    <h2>Scan tickets</h2>
+    <div id="reader" aria-label="Camera preview"></div>
+    <button id="startBtn" type="button">START CAMERA</button>
+    <button id="stopBtn" class="secondary" type="button" disabled>STOP CAMERA</button>
+    <div id="scanResult" class="result neutral" role="status" aria-live="polite">Signed in. Tap START CAMERA.</div>
+    <div id="count" class="counter">Ticket lookups in this session: 0</div>
+
+    <form id="manualForm">
+      <label for="manualToken">MANUAL TOKEN TEST (OPTIONAL)</label>
+      <input id="manualToken" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="2048">
+      <button id="manualBtn" class="secondary" type="submit">VERIFY TOKEN (READ-ONLY)</button>
+    </form>
+    <button id="logoutBtn" class="secondary" type="button">SIGN OUT</button>
+    <p class="help">Scans are checked against the HUMOR Architect register through the secured API. This version can never record an admission. For now, test an invalid token or a non-event QR code. Never enter or share the staff passcode outside the sign-in form.</p>
+  </section>
 </main>
 <script>
-  const startBtn = document.getElementById('startBtn');
-  const stopBtn = document.getElementById('stopBtn');
-  const statusBox = document.getElementById('status');
-  const countBox = document.getElementById('count');
+(() => {
+  'use strict';
+  const API = 'https://humor-architect-api.jolly-sky-5f26.workers.dev';
+  const el = id => document.getElementById(id);
+  let sessionToken = '';                // Memory only, never URL/localStorage
   let scanner = null;
   let running = false;
-  let detectedCount = 0;
-  let previousText = '';
-  let previousAt = 0;
+  let busy = false;
+  let lookups = 0;
+  let recent = new Map();               // Suppress repeated reads of a held QR
 
-  function status(message, kind = '') {
-    statusBox.textContent = message;
-    statusBox.className = kind;
+  function show(box, message, kind = 'neutral') {
+    box.textContent = message;          // No HTML injection from QR content
+    box.className = 'result ' + kind;
+    box.hidden = false;
   }
 
-  startBtn.addEventListener('click', async () => {
-    if (running) return;
+  async function api(path, body) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 15000);
+    try {
+      const response = await fetch(API + path, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(body),
+        signal: controller.signal,
+        cache: 'no-store'
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || 'SERVER_ERROR');
+      return data;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  async function stopCamera() {
+    if (!scanner) return;
+    const current = scanner;
+    scanner = null;
+    try {
+      if (running) await current.stop();
+      await current.clear();
+    } catch (_) { /* Closing a camera is best effort. */ }
+    running = false;
+    el('startBtn').disabled = false;
+    el('stopBtn').disabled = true;
+  }
+
+  async function signOut(expired = false) {
+    const oldToken = sessionToken;
+    sessionToken = '';
+    await stopCamera();
+    recent.clear();
+    el('scannerPanel').hidden = true;
+    el('loginPanel').hidden = false;
+    el('passcode').value = '';
+    el('manualToken').value = '';
+    if (expired) show(el('loginResult'), 'Session expired. Sign in again.', 'bad');
+    else el('loginResult').hidden = true;
+    if (oldToken) {
+      try { await api('/staff/logout', { sessionToken: oldToken }); }
+      catch (_) { /* Local logout happens even when offline. */ }
+    }
+  }
+
+  el('loginForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const passcode = el('passcode').value;
+    el('passcode').value = '';
+    el('loginBtn').disabled = true;
+    el('loginResult').hidden = true;
+    try {
+      const result = await api('/staff/login', { passcode });
+      if (!result.ok || !result.sessionToken) {
+        show(el('loginResult'), result.error === 'TOO_MANY_ATTEMPTS'
+          ? 'Too many attempts. Please try later.' : 'Sign-in failed.', 'bad');
+        return;
+      }
+      sessionToken = result.sessionToken;
+      lookups = 0;
+      recent.clear();
+      el('count').textContent = 'Ticket lookups in this session: 0';
+      el('loginPanel').hidden = true;
+      el('scannerPanel').hidden = false;
+      show(el('scanResult'), 'Signed in. Tap START CAMERA.', 'neutral');
+    } catch (_) {
+      show(el('loginResult'), 'Connection error. Check internet and try again.', 'bad');
+    } finally {
+      el('loginBtn').disabled = false;
+    }
+  });
+
+  async function verifyTicket(value) {
+    if (!sessionToken || busy || !value || !value.trim()) return;
+    busy = true;
+    el('manualBtn').disabled = true;
+    show(el('scanResult'), 'CHECKING TICKET…', 'neutral');
+    try {
+      // QR content is sent only to the authenticated API, never displayed or saved.
+      const result = await api('/ticket/preview', {
+        sessionToken,
+        qrToken: value.trim()
+      });
+      lookups += 1;
+      el('count').textContent = 'Ticket lookups in this session: ' + lookups;
+      switch (result.status) {
+        case 'VALID_DRY_RUN':
+          show(el('scanResult'), 'VALID TICKET\n' + (result.ticketId || '') +
+            '\nTEST ONLY — NOT CHECKED IN', 'good');
+          break;
+        case 'ALREADY_CHECKED_IN':
+          show(el('scanResult'), 'ALREADY CHECKED IN\n' + (result.ticketId || ''), 'bad');
+          break;
+        case 'INVALID':
+          show(el('scanResult'), 'INVALID TICKET', 'bad');
+          break;
+        case 'UNAUTHORIZED':
+          await signOut(true);
+          break;
+        default:
+          show(el('scanResult'), 'REQUIRES REVIEW\n' + (result.status || 'UNKNOWN'), 'bad');
+      }
+    } catch (_) {
+      show(el('scanResult'), 'Connection error — ticket not verified. Try again.', 'bad');
+    } finally {
+      busy = false;
+      el('manualBtn').disabled = false;
+    }
+  }
+
+  el('startBtn').addEventListener('click', async () => {
+    if (!sessionToken || running || scanner) return;
     if (!window.isSecureContext || !navigator.mediaDevices) {
-      status('Camera requires an HTTPS page. Open the published GitHub Pages URL.', 'bad');
+      show(el('scanResult'), 'Camera requires HTTPS and browser permission.', 'bad');
       return;
     }
     if (typeof Html5Qrcode === 'undefined') {
-      status('Scanner library did not load. Check your internet connection and reload.', 'bad');
+      show(el('scanResult'), 'Camera library unavailable. Reload the page.', 'bad');
       return;
     }
-    startBtn.disabled = true;
-    status('Requesting camera permission…');
+    el('startBtn').disabled = true;
+    show(el('scanResult'), 'Starting camera…', 'neutral');
     try {
       scanner = new Html5Qrcode('reader', {
-        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
-        verbose: false
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE], verbose: false
       });
       await scanner.start(
         { facingMode: 'environment' },
-        {
-          fps: 8,
-          qrbox: (width, height) => {
-            const side = Math.max(130, Math.floor(Math.min(width, height) * .70));
-            return { width: side, height: side };
-          }
-        },
-        (decodedText) => {
+        { fps: 8, qrbox: (width, height) => {
+          const side = Math.max(130, Math.floor(Math.min(width, height) * .7));
+          return { width: side, height: side };
+        } },
+        decoded => {
+          if (!sessionToken || busy) return;
           const now = Date.now();
-          if (decodedText === previousText && now - previousAt < 3500) return;
-          previousText = decodedText;
-          previousAt = now;
-          detectedCount += 1;
-          countBox.textContent = 'QR codes detected in this test: ' + detectedCount;
-          status('QR DETECTED — CAMERA WORKS. TEST ONLY; NO TICKET CHECKED IN.', 'good');
-          // Deliberately do not print, store or transmit decoded QR contents.
+          const last = recent.get(decoded) || 0;
+          if (now - last < 8000) return;
+          recent.set(decoded, now);
+          if (recent.size > 30) {
+            for (const [key, at] of recent) if (now - at > 8000) recent.delete(key);
+          }
+          void verifyTicket(decoded);
         },
-        () => { /* Individual undecodable frames are normal; ignore them. */ }
+        () => { /* Unreadable frames are normal. */ }
       );
       running = true;
-      stopBtn.disabled = false;
-      status('Camera is running. Point it at a non-sensitive QR code.');
-    } catch (err) {
-      startBtn.disabled = false;
-      stopBtn.disabled = true;
-      status('Could not open the camera. Check camera permission and use your phone browser. ' +
-        (err && err.name ? '(' + err.name + ')' : ''), 'bad');
-      try { if (scanner) await scanner.clear(); } catch (_) { /* ignore */ }
+      el('stopBtn').disabled = false;
+      show(el('scanResult'), 'CAMERA READY — Scan a QR code.', 'neutral');
+    } catch (_) {
+      try { if (scanner) await scanner.clear(); } catch (_) {}
       scanner = null;
+      running = false;
+      el('startBtn').disabled = false;
+      show(el('scanResult'), 'Could not open camera. Check browser permission.', 'bad');
     }
   });
 
-  stopBtn.addEventListener('click', async () => {
-    if (!scanner || !running) return;
-    stopBtn.disabled = true;
-    try {
-      await scanner.stop();
-      await scanner.clear();
-      running = false;
-      scanner = null;
-      startBtn.disabled = false;
-      status('Camera stopped. No ticket data was saved.');
-    } catch (err) {
-      stopBtn.disabled = false;
-      status('Could not stop the camera. Close this tab to stop access.', 'bad');
-    }
+  el('stopBtn').addEventListener('click', async () => {
+    el('stopBtn').disabled = true;
+    await stopCamera();
+    show(el('scanResult'), 'Camera stopped. No admissions recorded.', 'neutral');
   });
+
+  el('manualForm').addEventListener('submit', async event => {
+    event.preventDefault();
+    const value = el('manualToken').value;
+    el('manualToken').value = '';
+    await verifyTicket(value);
+  });
+
+  el('logoutBtn').addEventListener('click', () => { void signOut(); });
+})();
 </script>
 </body>
 </html>
