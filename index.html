@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
-  <title>HUMOR Architect — Staff Scanner (Test)</title>
+  <title>HUMOR Architect — Staff Scanner (Admission Connection Test)</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -38,7 +38,7 @@
   <div class="brand">HUMOR</div>
   <h1>THE ARCHITECT</h1>
   <p class="subtitle">STAFF QR SCANNER</p>
-  <div class="test">TEST MODE — TICKETS ARE VERIFIED ONLY<br>NO ADMISSIONS RECORDED</div>
+  <div class="test">TEST MODE — TICKETS VERIFIED ONLY<br>LIVE ADMISSIONS STILL DISABLED</div>
 
   <section id="loginPanel">
     <h2>Staff sign in</h2>
@@ -55,6 +55,8 @@
     <div id="reader" aria-label="Camera preview"></div>
     <button id="startBtn" type="button">START CAMERA</button>
     <button id="stopBtn" class="secondary" type="button" disabled>STOP CAMERA</button>
+    <button id="admissionTestBtn" class="secondary" type="button">TEST ADMISSION CONNECTION (NO ENTRY)</button>
+    <div id="admissionTestResult" class="result neutral" role="status" aria-live="polite" hidden></div>
     <div id="scanResult" class="result neutral" role="status" aria-live="polite">Signed in. Tap START CAMERA.</div>
     <div id="count" class="counter">Ticket lookups in this session: 0</div>
 
@@ -64,7 +66,7 @@
       <button id="manualBtn" class="secondary" type="submit">VERIFY TOKEN (READ-ONLY)</button>
     </form>
     <button id="logoutBtn" class="secondary" type="button">SIGN OUT</button>
-    <p class="help">Scans are checked against the HUMOR Architect register through the secured API. This version can never record an admission. For now, test an invalid token or a non-event QR code. Never enter or share the staff passcode outside the sign-in form.</p>
+    <p class="help">Scans are checked against the HUMOR Architect register through the secured API. Camera scans and manual verification are READ-ONLY. The admission test button uses a fake QR token and must return CHECKIN_DISABLED. Do not use this page for event entry yet. Never enter or share the staff passcode outside the sign-in form.</p>
   </section>
 </main>
 <script>
@@ -123,6 +125,7 @@
     await stopCamera();
     recent.clear();
     el('scannerPanel').hidden = true;
+    el('admissionTestResult').hidden = true;
     el('loginPanel').hidden = false;
     el('passcode').value = '';
     el('manualToken').value = '';
@@ -153,6 +156,7 @@
       el('count').textContent = 'Ticket lookups in this session: 0';
       el('loginPanel').hidden = true;
       el('scannerPanel').hidden = false;
+      el('admissionTestResult').hidden = true;
       show(el('scanResult'), 'Signed in. Tap START CAMERA.', 'neutral');
     } catch (_) {
       show(el('loginResult'), 'Connection error. Check internet and try again.', 'bad');
@@ -198,6 +202,36 @@
       el('manualBtn').disabled = false;
     }
   }
+
+  // Separate, harmless connectivity check. Always uses a deliberately fake token.
+  // Normal camera/manual scanning stays on the READ-ONLY /ticket/preview route.
+  el('admissionTestBtn').addEventListener('click', async () => {
+    if (!sessionToken || busy) return;
+    const button = el('admissionTestBtn');
+    button.disabled = true;
+    show(el('admissionTestResult'), 'TESTING ADMISSION CONNECTION…', 'neutral');
+    try {
+      const result = await api('/ticket/checkin', {
+        sessionToken,
+        qrToken: 'ARCHITECT-INVALID-ADMISSION-TEST'
+      });
+      if (result.status === 'CHECKIN_DISABLED') {
+        show(el('admissionTestResult'),
+          'ADMISSION CONNECTION READY\nLIVE CHECK-IN IS STILL DISABLED', 'good');
+      } else if (result.status === 'UNAUTHORIZED') {
+        await signOut(true);
+      } else {
+        show(el('admissionTestResult'),
+          'UNEXPECTED RESPONSE — DO NOT ENABLE ADMISSIONS\n' +
+          (result.status || 'UNKNOWN'), 'bad');
+      }
+    } catch (_) {
+      show(el('admissionTestResult'),
+        'CONNECTION ERROR — NO ENTRY RECORDED', 'bad');
+    } finally {
+      button.disabled = false;
+    }
+  });
 
   el('startBtn').addEventListener('click', async () => {
     if (!sessionToken || running || scanner) return;
