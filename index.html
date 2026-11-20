@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
   <meta name="theme-color" content="#000000">
-  <title>HUMOR Architect — Staff Scanner (Admission Connection Test)</title>
+  <title>HUMOR Architect — Staff Scanner (Admission)</title>
   <style>
     :root { color-scheme: dark; }
     * { box-sizing: border-box; }
@@ -38,7 +38,7 @@
   <div class="brand">HUMOR</div>
   <h1>THE ARCHITECT</h1>
   <p class="subtitle">STAFF QR SCANNER</p>
-  <div class="test">TEST MODE — TICKETS VERIFIED ONLY<br>LIVE ADMISSIONS STILL DISABLED</div>
+  <div class="test">ADMISSION SCANNER<br>ENTRIES COUNT ONLY WHEN APPROVED BY SERVER</div>
 
   <section id="loginPanel">
     <h2>Staff sign in</h2>
@@ -55,18 +55,16 @@
     <div id="reader" aria-label="Camera preview"></div>
     <button id="startBtn" type="button">START CAMERA</button>
     <button id="stopBtn" class="secondary" type="button" disabled>STOP CAMERA</button>
-    <button id="admissionTestBtn" class="secondary" type="button">TEST ADMISSION CONNECTION (NO ENTRY)</button>
-    <div id="admissionTestResult" class="result neutral" role="status" aria-live="polite" hidden></div>
     <div id="scanResult" class="result neutral" role="status" aria-live="polite">Signed in. Tap START CAMERA.</div>
-    <div id="count" class="counter">Ticket lookups in this session: 0</div>
+    <div id="count" class="counter">Scan attempts this session: 0 · Entries approved: 0</div>
 
     <form id="manualForm">
-      <label for="manualToken">MANUAL TOKEN TEST (OPTIONAL)</label>
+      <label for="manualToken">MANUAL TOKEN (CAMERA BACKUP)</label>
       <input id="manualToken" type="text" autocomplete="off" autocapitalize="none" spellcheck="false" maxlength="2048">
-      <button id="manualBtn" class="secondary" type="submit">VERIFY TOKEN (READ-ONLY)</button>
+      <button id="manualBtn" class="secondary" type="submit">CHECK IN TICKET</button>
     </form>
     <button id="logoutBtn" class="secondary" type="button">SIGN OUT</button>
-    <p class="help">Scans are checked against the HUMOR Architect register through the secured API. Camera scans and manual verification are READ-ONLY. The admission test button uses a fake QR token and must return CHECKIN_DISABLED. Do not use this page for event entry yet. Never enter or share the staff passcode outside the sign-in form.</p>
+    <p class="help">A green ENTRY APPROVED message means admission was recorded. A red or uncertain result means do not admit without resolving it. The Apps Script safety switch controls whether live check-in is allowed. Never share your staff passcode or ticket QR tokens.</p>
   </section>
 </main>
 <script>
@@ -79,6 +77,7 @@
   let running = false;
   let busy = false;
   let lookups = 0;
+  let approved = 0;
   let recent = new Map();               // Suppress repeated reads of a held QR
 
   function show(box, message, kind = 'neutral') {
@@ -125,7 +124,6 @@
     await stopCamera();
     recent.clear();
     el('scannerPanel').hidden = true;
-    el('admissionTestResult').hidden = true;
     el('loginPanel').hidden = false;
     el('passcode').value = '';
     el('manualToken').value = '';
@@ -152,12 +150,12 @@
       }
       sessionToken = result.sessionToken;
       lookups = 0;
+      approved = 0;
       recent.clear();
-      el('count').textContent = 'Ticket lookups in this session: 0';
+      el('count').textContent = 'Scan attempts this session: 0 · Entries approved: 0';
       el('loginPanel').hidden = true;
       el('scannerPanel').hidden = false;
-      el('admissionTestResult').hidden = true;
-      show(el('scanResult'), 'Signed in. Tap START CAMERA.', 'neutral');
+        show(el('scanResult'), 'Signed in. Tap START CAMERA.', 'neutral');
     } catch (_) {
       show(el('loginResult'), 'Connection error. Check internet and try again.', 'bad');
     } finally {
@@ -169,69 +167,60 @@
     if (!sessionToken || busy || !value || !value.trim()) return;
     busy = true;
     el('manualBtn').disabled = true;
-    show(el('scanResult'), 'CHECKING TICKET…', 'neutral');
+    show(el('scanResult'), 'CHECKING ADMISSION…', 'neutral');
     try {
-      // QR content is sent only to the authenticated API, never displayed or saved.
-      const result = await api('/ticket/preview', {
+      // Server verifies the staff session, ticket, and admission safety lock.
+      // A result of CHECKED_IN means the Sheets register was updated.
+      const result = await api('/ticket/checkin', {
         sessionToken,
         qrToken: value.trim()
       });
       lookups += 1;
-      el('count').textContent = 'Ticket lookups in this session: ' + lookups;
       switch (result.status) {
-        case 'VALID_DRY_RUN':
-          show(el('scanResult'), 'VALID TICKET\n' + (result.ticketId || '') +
-            '\nTEST ONLY — NOT CHECKED IN', 'good');
+        case 'CHECKED_IN':
+          approved += 1;
+          show(el('scanResult'), 'ENTRY APPROVED\n' + (result.ticketId || '') +
+            '\nCHECKED IN', 'good');
+          if (navigator.vibrate) navigator.vibrate(90);
           break;
         case 'ALREADY_CHECKED_IN':
-          show(el('scanResult'), 'ALREADY CHECKED IN\n' + (result.ticketId || ''), 'bad');
+          show(el('scanResult'), 'ALREADY CHECKED IN\n' + (result.ticketId || '') +
+            '\nDO NOT ADMIT AGAIN', 'bad');
           break;
         case 'INVALID':
-          show(el('scanResult'), 'INVALID TICKET', 'bad');
+          show(el('scanResult'), 'INVALID TICKET\nDO NOT ADMIT', 'bad');
+          break;
+        case 'INACTIVE':
+        case 'REVIEW_STATUS':
+        case 'DATA_ERROR':
+          show(el('scanResult'), 'TICKET REQUIRES REVIEW\n' +
+            (result.ticketId || '') + '\nDO NOT ADMIT', 'bad');
+          break;
+        case 'CHECKIN_DISABLED':
+          show(el('scanResult'), 'ADMISSIONS NOT ENABLED\nNO ENTRY RECORDED', 'bad');
+          break;
+        case 'VALID_DRY_RUN':
+          show(el('scanResult'), 'READ-ONLY RESULT\nNO ENTRY RECORDED', 'bad');
           break;
         case 'UNAUTHORIZED':
           await signOut(true);
           break;
         default:
-          show(el('scanResult'), 'REQUIRES REVIEW\n' + (result.status || 'UNKNOWN'), 'bad');
+          show(el('scanResult'), 'UNEXPECTED RESPONSE\nNO ENTRY CONFIRMED\n' +
+            (result.status || 'UNKNOWN'), 'bad');
       }
+      el('count').textContent = 'Scan attempts this session: ' + lookups +
+        ' · Entries approved: ' + approved;
     } catch (_) {
-      show(el('scanResult'), 'Connection error — ticket not verified. Try again.', 'bad');
+      // A network timeout might happen after Google recorded the check-in.
+      // Never tell staff a failed network request means admission was not recorded.
+      show(el('scanResult'), 'CONNECTION ERROR — OUTCOME UNKNOWN\n' +
+        'DO NOT ADMIT UNTIL STATUS IS VERIFIED', 'bad');
     } finally {
       busy = false;
       el('manualBtn').disabled = false;
     }
   }
-
-  // Separate, harmless connectivity check. Always uses a deliberately fake token.
-  // Normal camera/manual scanning stays on the READ-ONLY /ticket/preview route.
-  el('admissionTestBtn').addEventListener('click', async () => {
-    if (!sessionToken || busy) return;
-    const button = el('admissionTestBtn');
-    button.disabled = true;
-    show(el('admissionTestResult'), 'TESTING ADMISSION CONNECTION…', 'neutral');
-    try {
-      const result = await api('/ticket/checkin', {
-        sessionToken,
-        qrToken: 'ARCHITECT-INVALID-ADMISSION-TEST'
-      });
-      if (result.status === 'CHECKIN_DISABLED') {
-        show(el('admissionTestResult'),
-          'ADMISSION CONNECTION READY\nLIVE CHECK-IN IS STILL DISABLED', 'good');
-      } else if (result.status === 'UNAUTHORIZED') {
-        await signOut(true);
-      } else {
-        show(el('admissionTestResult'),
-          'UNEXPECTED RESPONSE — DO NOT ENABLE ADMISSIONS\n' +
-          (result.status || 'UNKNOWN'), 'bad');
-      }
-    } catch (_) {
-      show(el('admissionTestResult'),
-        'CONNECTION ERROR — NO ENTRY RECORDED', 'bad');
-    } finally {
-      button.disabled = false;
-    }
-  });
 
   el('startBtn').addEventListener('click', async () => {
     if (!sessionToken || running || scanner) return;
@@ -283,7 +272,7 @@
   el('stopBtn').addEventListener('click', async () => {
     el('stopBtn').disabled = true;
     await stopCamera();
-    show(el('scanResult'), 'Camera stopped. No admissions recorded.', 'neutral');
+    show(el('scanResult'), 'Camera stopped.', 'neutral');
   });
 
   el('manualForm').addEventListener('submit', async event => {
